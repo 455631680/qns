@@ -1,0 +1,161 @@
+import React from 'react'
+import styled from '@emotion/styled/macro'
+import { useTranslation } from 'react-i18next'
+import { gql } from '@apollo/client'
+import mq from 'mediaQuery'
+import { useQuery, useMutation } from '@apollo/client'
+
+import UnstyledBlockies from '../Blockies'
+import NoAccountsModal from '../NoAccounts/NoAccountsModal'
+import { GET_REVERSE_RECORD } from '../../graphql/queries'
+import { connectProvider, disconnectProvider } from '../../utils/providerUtils'
+import { imageUrl } from '../../utils/utils'
+
+const NetworkInformationContainer = styled('div')`
+  position: relative;
+  display: flex;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  ${mq.medium`
+    margin-top: 0px;
+    margin-bottom: 50px;
+    display: block;
+    border: none;
+  `}
+`
+
+const Blockies = styled(UnstyledBlockies)`
+  border-radius: 50%;
+  position: absolute;
+  left: 0px;
+  top: 10px;
+  ${mq.medium`
+    box-shadow: 3px 5px 24px 0 #d5e2ec;
+  `}
+`
+
+const Avatar = styled('img')`
+  width: 48px;
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  border-radius: 50%;
+  ${mq.medium`
+    box-shadow: 3px 5px 24px 0 #d5e2ec;
+  `}
+`
+
+const NetworkStatus = styled('div')`
+  color: #cacaca;
+  font-size: 14px;
+  text-transform: capitalize;
+  font-weight: 100;
+  margin-left: 56px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+
+  &:before {
+    content: '';
+    display: flex;
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: #47c799;
+    margin-right: 5px;
+  }
+`
+
+const Account = styled('div')`
+  color: #adbbcd;
+  font-size: 16px;
+  font-weight: 200;
+  font-family: Urbanist Mono;
+  width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-left: 56px;
+`
+
+const AccountContainer = styled('div')`
+  padding: 15px 0 0;
+  position: relative;
+  padding: ${({ isReadOnly }) => (isReadOnly ? '50px 0 0' : '15px 0 0')};
+`
+
+const NETWORK_INFORMATION_QUERY = gql`
+  query getNetworkInfo @client {
+    accounts
+    isReadOnly
+    isSafeApp
+    avatar
+    network
+    displayName
+  }
+`
+
+function NetworkInformation() {
+  const { t } = useTranslation()
+  const {
+    data: { accounts, isSafeApp, network, displayName, isReadOnly },
+  } = useQuery(NETWORK_INFORMATION_QUERY)
+
+  const { data: { getReverseRecord } = {}, loading: reverseRecordLoading } =
+    useQuery(GET_REVERSE_RECORD, {
+      variables: {
+        address: accounts?.[0],
+      },
+      skip: !accounts?.length,
+    })
+
+  return (
+    <NetworkInformationContainer hasAccount={accounts && accounts.length > 0}>
+      {!isReadOnly ? (
+        <AccountContainer isReadOnly={isReadOnly}>
+          {!reverseRecordLoading &&
+          getReverseRecord &&
+          getReverseRecord.avatar ? (
+            <Avatar
+              src={imageUrl(getReverseRecord.avatar, displayName, network)}
+            />
+          ) : (
+            <Blockies address={accounts[0]} imageSize={45} />
+          )}
+          <Account data-testid="account" className="account">
+            <span>{displayName}</span>
+          </Account>
+          <NetworkStatus>
+            {network} {t('c.network')}
+          </NetworkStatus>
+          {!isSafeApp && (
+            <NoAccountsModal
+              onClick={disconnectProvider}
+              buttonText={t('c.disconnect')}
+              colour={'#0191E2'}
+              active={isReadOnly ? true : false}
+              width="100%"
+            />
+          )}
+        </AccountContainer>
+      ) : (
+        <AccountContainer isReadOnly={isReadOnly}>
+          {/* <Account data-testid="account" className="account">
+            {t('c.readonly')}
+          </Account>
+          <NetworkStatus>
+            {network} {t('c.network')}
+          </NetworkStatus> */}
+          <NoAccountsModal
+            onClick={connectProvider}
+            colour={'#25FFB1'}
+            buttonText="Connect"
+            active={isReadOnly ? true : false}
+            width="100%"
+          />
+        </AccountContainer>
+      )}
+    </NetworkInformationContainer>
+  )
+}
+export default NetworkInformation

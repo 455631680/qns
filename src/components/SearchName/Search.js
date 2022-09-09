@@ -1,0 +1,291 @@
+import React, { useEffect, useState } from 'react'
+import cn from 'classnames'
+import { toArray } from 'lodash'
+import axios from 'axios'
+import { Formik } from 'formik'
+import { withRouter } from 'react-router'
+import { useDispatch } from 'react-redux'
+import { useQuery } from '@apollo/client'
+import ClickAwayListener from 'react-click-away-listener'
+import { useAccount } from 'components/QueryAccount'
+import SearchIcon from 'components/Icons/SearchIcon'
+import FaceCryIcon from 'components/Icons/FaceCryIcon'
+import FaceHappyIcon from 'components/Icons/FaceHappyIcon'
+import { setSearchDomainName, setSelectedDomain } from 'app/slices/domainSlice'
+
+import '../../api/subDomainRegistrar'
+import {
+  parseSearchTerm,
+  validateName,
+  validateDomain,
+} from '../../utils/utils'
+import { GET_HUNGER_PHASE_INFO, GET_IS_CLAIMABLE } from '../../graphql/queries'
+import { ethers } from '@siddomains/ui'
+
+function Search({
+  history,
+  className,
+  style,
+  searchingDomainName,
+  errorShowing = true,
+  isShowSearchBtn = true,
+  errorsStyling = false,
+  suggestionClassName = 'w-[calc(100%-56px)]',
+  isAbsolutePosition = true,
+}) {
+  const [showPopup, setShowPopup] = useState(false)
+  const [result, setResult] = useState(null)
+  const [isInHungerPhase, setIsInHungerPhase] = useState(false)
+  // const account = useAccount()
+  const dispatch = useDispatch()
+
+  // const { error: claimError, data: isClaimable } = useQuery(GET_IS_CLAIMABLE, {
+  //   variables: { address: account },
+  //   fetchPolicy: 'no-cache',
+  // })
+
+  // const { data: hungerPhaseInfo } = useQuery(GET_HUNGER_PHASE_INFO)
+
+  // useEffect(() => {
+  //   if (hungerPhaseInfo?.getHungerPhaseInfo) {
+  //     const startTime = new Date(
+  //       hungerPhaseInfo.getHungerPhaseInfo.startTime * 1000
+  //     )
+  //     const endTime = new Date(
+  //       hungerPhaseInfo.getHungerPhaseInfo.endTime * 1000
+  //     )
+  //     const timeNow = new Date().getTime()
+  //     const dailyQuota = ethers.BigNumber.from(
+  //       hungerPhaseInfo.getHungerPhaseInfo.dailyQuota
+  //     )
+  //     const dailyUsed = ethers.BigNumber.from(
+  //       hungerPhaseInfo.getHungerPhaseInfo.dailyUsed
+  //     )
+  //     if (timeNow > startTime && timeNow < endTime && dailyUsed < dailyQuota) {
+  //       setIsInHungerPhase(true)
+  //     }
+  //   }
+  // }, [hungerPhaseInfo])
+
+  const gotoDetailPage = () => {
+    setShowPopup(false)
+    if (result.Owner) {
+      const date = new Date(result?.Expires)
+      dispatch(setSelectedDomain({ ...result, expires_at: date }))
+      history.push(`/profile`)
+    } else {
+      history.push(`/name/${result.name}.bnb/register`)
+    }
+  }
+
+  useEffect(() => {
+    if (searchingDomainName) {
+      dispatch(setSearchDomainName(''))
+      const params = {
+        ChainID: parseInt(process.env.REACT_APP_NETWORK_CHAIN_ID),
+        name: searchingDomainName,
+      }
+
+      axios
+        .post(`${process.env.REACT_APP_BACKEND_URL}/nameof`, {
+          ...params,
+        })
+        .then((res) => {
+          setResult(res.data)
+          setShowPopup(true)
+        })
+    }
+  }, [searchingDomainName])
+
+  return (
+    <div className={cn('relative', className)}>
+      <Formik
+        initialValues={{ searchKey: searchingDomainName ?? '' }}
+        validate={async (values) => {
+          let errors = {}
+          try {
+            let searchTerm
+            if (values.searchKey.split('.').length === 1) {
+              searchTerm = values.searchKey + '.eth'
+            } else {
+              searchTerm = values.searchKey
+            }
+            const parsed = await validateName(searchTerm)
+            const filterParsed = parsed.replace('.eth', '')
+            values.searchKey = filterParsed
+
+            if (toArray(values.searchKey).length < 3) {
+              errors.searchKey = 'Name length must be at least 3 characters'
+            } else if (!validateDomain(values.searchKey)) {
+              errors.searchKey = 'Name contains unsupported characters'
+            }
+          } catch (err) {
+            errors.searchKey = 'Name contains unsupported characters'
+          }
+          return errors
+        }}
+        onSubmit={(values, { setSubmitting }) => {
+          const params = {
+            ChainID: parseInt(process.env.REACT_APP_NETWORK_CHAIN_ID),
+            name: values.searchKey,
+          }
+          axios
+            .post(`${process.env.REACT_APP_BACKEND_URL}/nameof`, {
+              ...params,
+            })
+            .then((res) => {
+              setResult(res.data)
+              setShowPopup(true)
+            })
+        }}
+      >
+        {({
+          values,
+          errors,
+          touched,
+          handleChange,
+          handleBlur,
+          handleSubmit,
+        }) => (
+          <form
+            className={cn(`relative`)}
+            style={style}
+            onSubmit={handleSubmit}
+          >
+            <button
+              className="absolute left-4 top-[14px]"
+              data-testid={'home-search-button'}
+            >
+              <SearchIcon className="text-green-100" />
+            </button>
+            <div>
+              <input
+                className={cn(
+                  'w-full bg-transparent py-[10px] pl-10 text-base border border-green-100 rounded-[18px] focus:bg-transparent text-green-100 active:bg-transparent focus:outline-none',
+                  isShowSearchBtn ? 'pr-[150px]' : 'pr-[50px]'
+                )}
+                placeholder="Explore the space"
+                onChange={(e) => {
+                  setShowPopup(false)
+                  handleChange(e)
+                }}
+                type="text"
+                name="searchKey"
+                onBlur={handleBlur}
+                value={values.searchKey}
+              />
+            </div>
+            {errorShowing &&
+              errors.searchKey &&
+              touched.searchKey &&
+              values.searchKey.length > 0 && (
+                <div
+                  className={cn(
+                    'text-red-100 text-sm md:text-base font-semibold mt-2 md:mt-1 ml-3',
+                    errorsStyling
+                      ? 'absolute shadow-popup flex w-[calc(100%-12px)] bg-dark-300 px-3 py-3 rounded-xl backdrop-blur-[5px] justify-between z-auto z-[1]'
+                      : ''
+                  )}
+                >
+                  {errors.searchKey}
+                </div>
+              )}
+            <div
+              className={cn(
+                'text-primary font-urbanist font-semibold text-base absolute top-[10px]',
+                isShowSearchBtn ? 'right-[110px]' : 'right-5'
+              )}
+            >
+              .bnb
+            </div>
+            {isShowSearchBtn && (
+              <button
+                type="submit"
+                className="text-darkButton w-[92px] bg-primary text-semibold text-[14px] font-semibold font-urbanist py-1 px-6 rounded-[10px] absolute top-2 right-2"
+              >
+                Search
+              </button>
+            )}
+          </form>
+        )}
+      </Formik>
+      {showPopup && (
+        <ClickAwayListener onClickAway={() => setShowPopup(false)}>
+          <div
+            className={cn(
+              'shadow-popup flex md:w-full bg-dark-300 px-3 py-3 rounded-xl backdrop-blur-[5px] justify-between z-auto z-[1]',
+              suggestionClassName,
+              isAbsolutePosition ? 'absolute top-[55px]' : 'relative mt-2'
+            )}
+          >
+            <div className="flex items-center max-w-[calc(100%-170px)]">
+              {result.Owner ? (
+                <FaceCryIcon className="text-green-200" />
+              ) : (
+                <FaceHappyIcon className="text-green-200" />
+              )}
+              <span
+                className={cn(
+                  'ml-2 text-base font-semibold text-green-200 truncate'
+                )}
+              >
+                {result.name}.bnb
+              </span>
+            </div>
+            <div className="flex items-center">
+              <div
+                className={cn(
+                  'text-sm font-semibold leading-[22px] font-urbanist',
+                  result.Owner ? 'text-red-100' : 'text-blue-200'
+                )}
+              >
+                {result.Owner ? 'Unavailable' : 'available'}
+              </div>
+              <button
+                disabled={
+                  !result.Owner &&
+                  // (!isInHungerPhase || !isClaimable?.getIsClaimable)
+                  !isInHungerPhase
+                }
+                onClick={gotoDetailPage}
+                className={cn(
+                  'cursor-pointer w-[92px] justify-center flex items-center h-7 text-white text-center rounded-lg font-urbanist font-semibold ml-3',
+                  result.Owner
+                    ? 'bg-red-100'
+                    : // : isInHungerPhase && isClaimable?.getIsClaimable
+                    isInHungerPhase
+                    ? 'bg-blue-100'
+                    : 'bg-gray-800 text-white cursor-not-allowed'
+                )}
+              >
+                {result.Owner ? <span>View</span> : <span>Register</span>}
+              </button>
+            </div>
+          </div>
+        </ClickAwayListener>
+      )}
+    </div>
+  )
+}
+
+const SearchWithRouter = withRouter(Search)
+
+const SearchContainer = ({
+  searchDomain,
+  className,
+  style,
+  searchingDomainName,
+}) => {
+  return (
+    <SearchWithRouter
+      searchDomain={searchDomain}
+      className={className}
+      style={style}
+      searchingDomainName={searchingDomainName}
+    />
+  )
+}
+
+export { SearchWithRouter as Search }
+
+export default SearchContainer

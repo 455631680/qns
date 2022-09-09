@@ -1,0 +1,16 @@
+{
+  "short_name": "SPACE ID App",
+  "name": "SPACE ID App",
+  "description": "Decentralised naming for wallets, websites, & more.",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "./index.html",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
